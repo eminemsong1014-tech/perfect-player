@@ -1,0 +1,108 @@
+(function (window) {
+  'use strict';
+
+  var MARK = '__leagueOvrGuardWrapped__';
+
+  function gameState() { return window.__RETRO_STATE_BRIDGE__ || window.STATE || {}; }
+  function leagueData() { return window.__RETRO_NBA2K_DATA_BRIDGE__ || window.NBA2K_DATA || null; }
+  function leagueTeams() { return window.__RETRO_NBA2K_TEAMS_BRIDGE__ || window.NBA2K_TEAMS || []; }
+
+  function getOvr(player, fallback) {
+    if (!player) return Number(fallback) > 0 ? Math.round(Number(fallback)) : 58;
+    var fields = ['ovr', 'displayOverall', 'overall', 'baseOVR', 'rating'];
+    for (var i = 0; i < fields.length; i++) {
+      var value = Number(player[fields[i]]);
+      if (Number.isFinite(value) && value > 0) return Math.max(1, Math.min(99, Math.round(value)));
+    }
+    var attrs = (window.SIM_CONFIG && Array.isArray(window.SIM_CONFIG.ATTR_LIST)) ? window.SIM_CONFIG.ATTR_LIST : ['threePT', 'MID', 'FIN', 'DNK', 'HAN', 'PAS', 'PDEF', 'IDEF', 'BLK', 'REB', 'ATH', 'STR', 'CLU'];
+    var hasAttrs = attrs.some(function (key) { return player[key] != null && Number.isFinite(Number(player[key])); });
+    if (hasAttrs && typeof window.calcOVR === 'function') {
+      try {
+        var calculated = Number(window.calcOVR(player, player.pos || 'SF'));
+        if (Number.isFinite(calculated) && calculated > 0) return Math.max(1, Math.min(99, Math.round(calculated)));
+      } catch (e) {}
+    }
+    var safeFallback = Number(fallback);
+    return Number.isFinite(safeFallback) && safeFallback > 0 ? Math.max(1, Math.min(99, Math.round(safeFallback))) : 58;
+  }
+
+  // 84-95 历史阵容的展示加成：只返回显示值，不回写球员，也不参与模拟、评奖或排序。
+  function getRetroDisplayOvr(player) {
+    var base = Number(player && (player.baseOVR != null ? player.baseOVR : player.ovr));
+    if (!Number.isFinite(base) || base <= 0) base = getOvr(player, 0);
+    base = Math.max(0, Math.min(99, Math.round(base)));
+    var state = gameState();
+    var year = 0;
+    try {
+      year = typeof window.getCurrentSeasonYear === 'function' ? Number(window.getCurrentSeasonYear()) : 0;
+    } catch (e) {}
+    var retroEnabled = !!(state && state._legendSeasonDataMode && year >= 1984 && year <= 1994);
+    if (!retroEnabled || !player || player._isUser || player.isUser) return base;
+    return Math.max(0, Math.min(99, Math.round(base + (base > 70 ? 15 : 8))));
+  }
+
+  function normalizePlayer(player) {
+    if (!player) return;
+    player.ovr = getOvr(player);
+  }
+
+  function normalizeAll() {
+    var data = leagueData();
+    var teams = leagueTeams();
+    if (data && Array.isArray(teams)) {
+      teams.forEach(function (team) {
+        var roster = data[team];
+        if (Array.isArray(roster)) roster.forEach(normalizePlayer);
+      });
+    }
+    var currentState = gameState();
+    if (currentState && Array.isArray(currentState._freeAgentPool)) {
+      currentState._freeAgentPool.forEach(normalizePlayer);
+    }
+  }
+
+  function wrap(name) {
+    var original = window[name];
+    if (typeof original !== 'function' || original[MARK]) return;
+    var wrapped = function () {
+      normalizeAll();
+      var result = original.apply(this, arguments);
+      normalizeAll();
+      return result;
+    };
+    wrapped[MARK] = true;
+    wrapped.original = original;
+    window[name] = wrapped;
+  }
+
+  window.getLeaguePlayerOvr = window.getLeaguePlayerOvr || getOvr;
+  window.getRetroDisplayOvr = getRetroDisplayOvr;
+  window.normalizeLeaguePlayerOvr = window.normalizeLeaguePlayerOvr || function (player, fallback) {
+    if (!player) return 58;
+    player.ovr = getOvr(player, fallback);
+    return player.ovr;
+  };
+  window.normalizeLeaguePlayerRatings = normalizeAll;
+
+  normalizeAll();
+  [
+    'evolveLeague',
+    'processDraft',
+    'assignFreeAgents',
+    'processTrades',
+    'repairLeagueRosters',
+    'continueCareerAfterTraining',
+    'startSeasonCore',
+    'resetForNewSeason',
+    'showOffSeasonReport',
+    'showRosterReview'
+  ].forEach(wrap);
+  normalizeAll();
+
+  window.LEAGUE_OVR_GUARD_HOTPLUG = {
+    enabled: true,
+    normalize: normalizeAll,
+    get: getOvr,
+    disable: function () { this.enabled = false; }
+  };
+})(window);

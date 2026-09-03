@@ -1,0 +1,428 @@
+(function (window, document) {
+  'use strict';
+
+  var API = { enabled: true };
+  var STYLE_ID = 'historical-award-compare-hotplug-style';
+  var SCREEN_ID = 'screen-historical-award-compare';
+  var injected = false;
+  var STAR_GROUPS = [
+    { start: 1984, end: 2000, players: ['乔丹', '奥尼尔', '卡尔-马龙', '奥拉朱旺', '大卫-罗宾逊'] },
+    { start: 2001, end: 2005, players: ['奥尼尔', '科比', '艾弗森', '邓肯', '加内特', '麦迪'] },
+    { start: 2006, end: 2010, players: ['科比', '詹姆斯', '保罗', '纳什', '诺维茨基'] },
+    { start: 2011, end: 2015, players: ['詹姆斯', '杜兰特', '保罗', '威斯布鲁克', '库里'] },
+    { start: 2016, end: 2020, players: ['詹姆斯', '杜兰特', '哈登', '库里', '威少', '伦纳德', '字母哥'] },
+    { start: 2021, end: 2025, players: ['约基奇', '恩比德', '东契奇', '字母哥', '亚历山大'] }
+  ];
+  var STAR_ALIASES = {
+    '乔丹': ['乔丹', '迈克尔-乔丹'], '奥尼尔': ['奥尼尔', '沙奎尔-奥尼尔'],
+    '卡尔-马龙': ['卡尔-马龙'], '奥拉朱旺': ['奥拉朱旺', '哈基姆-奥拉朱旺'],
+    '大卫-罗宾逊': ['大卫-罗宾逊'], '科比': ['科比', '科比-布莱恩特'],
+    '艾弗森': ['艾弗森', '阿伦-艾弗森'], '邓肯': ['邓肯', '蒂姆-邓肯'],
+    '加内特': ['加内特', '凯文-加内特'], '麦迪': ['麦迪', '特雷西-麦克格雷迪'],
+    '詹姆斯': ['詹姆斯', '勒布朗-詹姆斯'], '杜兰特': ['杜兰特', '凯文-杜兰特'],
+    '保罗': ['保罗', '克里斯-保罗'], '纳什': ['纳什', '史蒂夫-纳什'],
+    '诺维茨基': ['诺维茨基', '德克-诺维茨基'], '威斯布鲁克': ['威斯布鲁克', '拉塞尔-威斯布鲁克'],
+    '库里': ['库里', '斯蒂芬-库里'], '哈登': ['哈登', '詹姆斯-哈登'],
+    '威少': ['威少', '威斯布鲁克', '拉塞尔-威斯布鲁克'], '伦纳德': ['伦纳德', '科怀-伦纳德'],
+    '字母哥': ['字母哥', '扬尼斯-阿德托昆博'], '约基奇': ['约基奇', '尼古拉-约基奇'],
+    '恩比德': ['恩比德', '乔尔-恩比德'], '东契奇': ['东契奇', '卢卡-东契奇'],
+    '亚历山大': ['亚历山大', '谢伊-吉尔杰斯-亚历山大']
+  };
+  var AWARDS = [
+    { act: 'mvp', label: 'MVP', field: '常规赛MVP', terms: ['最有价值球员', '常规赛MVP', 'MVP'] },
+    { act: 'fmvp', label: 'FMVP', field: '总决赛MVP', terms: ['总决赛最有价值球员', '总决赛MVP', 'FMVP'] },
+    { act: 'dpoy', label: '最佳防守球员', field: '最佳防守球员', terms: ['最佳防守球员'] },
+    { act: 'rebTitle', label: '篮板王', field: '篮板王', terms: ['篮板王'] },
+    { act: 'astTitle', label: '助攻王', field: '助攻王', terms: ['助攻王'] },
+    { act: 'stlTitle', label: '抢断王', field: '抢断王', terms: ['抢断王'] },
+    { act: 'blkTitle', label: '盖帽王', field: '盖帽王', terms: ['盖帽王'] },
+    { act: 'allNBA', label: '最佳阵容', field: '最佳阵容', terms: ['最佳阵容'] },
+    { act: 'allDefense1', label: '最佳防守阵容', field: '最佳防守阵容', terms: ['最佳防守阵容'] },
+    { act: 'roty', label: '最佳新秀', field: '最佳新秀', terms: ['最佳新秀'] },
+    { act: 'allRookie', label: '最佳新秀阵容', field: '最佳新秀阵容', terms: ['最佳新秀阵容'] },
+    { act: 'sixthman', label: '最佳第六人', field: '最佳第六人', terms: ['最佳第六人'] }
+  ];
+  var LEAGUE_AWARD_LABELS = {
+    mvp: 'MVP', fmvp: 'FMVP', dpoy: '最佳防守球员',
+    scoringTitle: '得分王', rebTitle: '篮板王', astTitle: '助攻王', stlTitle: '抢断王', blkTitle: '盖帽王',
+    allStar: '全明星', allNBA: '最佳阵容', allNBA2: '最佳阵容', allNBA3: '最佳阵容',
+    allDefense1: '最佳防守阵容', allDefense2: '最佳防守阵容', roty: '最佳新秀', allRookie: '最佳新秀阵容', sixthman: '最佳第六人'
+  };
+
+  function esc(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+    });
+  }
+
+  function state() { return window.__RETRO_STATE_BRIDGE__ || window.STATE || {}; }
+  function career() { return state().career || {}; }
+  function seasonCount() {
+    var savedCount = parseInt(career().seasonCount, 10) || 0;
+    // 常规赛奖项页先于 saveCurrentSeasonToCareer 展示，此时 seasonCount 仍少一季。
+    // 页面已经有赛季奖项且未保存时，当前正在展示的就是下一季的完成结果。
+    if (!state()._careerSaved && state().season && Array.isArray(state().season.awards) && state().season.awards.length) return savedCount + 1;
+    return savedCount;
+  }
+  function isRegularSeasonComplete() {
+    var s = state().season;
+    if (!s || !Array.isArray(s.schedule) || !s.schedule.length) return false;
+    return !s.schedule.some(function (game) { return game && !game.simulated; });
+  }
+  function isChampionDecided() {
+    var s = state().season;
+    return !!(s && (s.isChampion || s.playoffsDone || (s.championInfo && s.championInfo.champion)));
+  }
+  function baseYear() {
+    var s = state();
+    var raw = s.careerStartSeason || s.careerSeason || s.eraStart;
+    var match = String(raw == null ? '' : raw).match(/\d{4}/);
+    return match ? parseInt(match[0], 10) : 0;
+  }
+  function seasonKey(number) {
+    var year = baseYear() + number - 1;
+    return year + '-' + String((year + 1) % 100).padStart(2, '0');
+  }
+  function userName() {
+    try { return typeof window.getHupuDisplayName === 'function' ? window.getHupuDisplayName() : '你'; } catch (e) { return '你'; }
+  }
+  function teamName() {
+    try { return typeof window.getTeamName === 'function' ? window.getTeamName(state().careerTeam) : (state().careerTeam || '你的球队'); } catch (e) { return state().careerTeam || '你的球队'; }
+  }
+  function originalParts(value) {
+    var match = String(value || '').match(/^(.+?)\s*\((.+)\)$/);
+    return { name: match ? match[1] : String(value || '历史数据未登记'), team: match ? match[2] : '' };
+  }
+  function isUserAward(award, meta, savedRecord) {
+    if (!award) return false;
+    if (award.isUser === true) return true;
+    var text = String(award.label || award.act || '');
+    // career.seasons 保存的是已经筛选过的玩家荣誉清单，没有 isUser 字段。
+    if (savedRecord && meta.terms.some(function (term) { return text.indexOf(term) >= 0; })) return true;
+    return meta.terms.some(function (term) { return text.indexOf(term) >= 0; }) &&
+      String(award.winner || '').indexOf(userName()) >= 0;
+  }
+  function recordAwards(record) { return record && Array.isArray(record.awards) ? record.awards : []; }
+  function awardFor(record, meta, current) {
+    var list = record ? recordAwards(record) : [];
+    for (var i = 0; i < list.length; i++) if (isUserAward(list[i], meta, !!record)) return list[i];
+    if (current && state().season && Array.isArray(state().season.awards)) {
+      for (var j = 0; j < state().season.awards.length; j++) {
+        if (state().season.awards[j].act === meta.act && isUserAward(state().season.awards[j], meta)) return state().season.awards[j];
+      }
+    }
+    return null;
+  }
+  function recordsForWindow(from, to) {
+    var list = Array.isArray(career().seasons) ? career().seasons : [];
+    var out = [];
+    for (var i = from; i <= to; i++) {
+      var found = null;
+      for (var j = 0; j < list.length; j++) if (parseInt(list[j].seasonNum, 10) === i) { found = list[j]; break; }
+      // 未保存的当前赛季是联盟全量快照，必须走 isUser 归属过滤。
+      out.push(found || (i === to ? { seasonNum: i, leagueAwards: state().season && state().season.awards } : null));
+    }
+    return out;
+  }
+  function allRecordsThrough(count) {
+    var list = Array.isArray(career().seasons) ? career().seasons : [];
+    var out = [];
+    for (var i = 0; i < list.length; i++) {
+      if (parseInt(list[i].seasonNum, 10) <= count) out.push(list[i]);
+    }
+    if (state().season && Array.isArray(state().season.awards) && !state()._careerSaved) {
+      out.push({ seasonNum: count, leagueAwards: state().season.awards });
+    }
+    return out;
+  }
+  function hasAlias(winner, name) {
+    // 只比较完整获奖者姓名，避免“保罗”误命中“保罗-皮尔斯”。
+    var text = String(winner || '').split('(')[0].trim().replace(/[·‐‑‒–—]/g, '-');
+    var aliases = STAR_ALIASES[name] || [name];
+    return aliases.some(function (alias) {
+      return text === String(alias || '').trim().replace(/[·‐‑‒–—]/g, '-');
+    });
+  }
+  function starGroupForYear(year) {
+    var value = parseInt(year, 10);
+    for (var i = 0; i < STAR_GROUPS.length; i++) {
+      if (value >= STAR_GROUPS[i].start && value <= STAR_GROUPS[i].end) return STAR_GROUPS[i];
+    }
+    return value < STAR_GROUPS[0].start ? STAR_GROUPS[0] : STAR_GROUPS[STAR_GROUPS.length - 1];
+  }
+  function starAwardSummary(count) {
+    var records = allRecordsThrough(count);
+    var historical = window.HISTORICAL_AWARDS_BY_SEASON || {};
+    var names = [];
+    records.forEach(function (record) {
+      var group = starGroupForYear(baseYear() + Math.max(0, parseInt(record && record.seasonNum, 10) - 1));
+      group.players.forEach(function (name) { if (names.indexOf(name) < 0) names.push(name); });
+    });
+    if (!names.length) names = starGroupForYear(baseYear()).players.slice();
+    return names.map(function (name) {
+      var awards = {};
+      var realAwards = {};
+      records.forEach(function (record) {
+        (record && Array.isArray(record.leagueAwards) ? record.leagueAwards : []).forEach(function (award) {
+          if (!award || !award.act || award.act === 'scoringTitle' || ['allNBA', 'allNBA2', 'allNBA3', 'allDefense1', 'allDefense2', 'allRookie'].indexOf(award.act) >= 0 || !hasAlias(award.winner || '', name)) return;
+          var label = LEAGUE_AWARD_LABELS[award.act] || award.label || award.act;
+          awards[label] = (awards[label] || 0) + 1;
+        });
+      });
+      for (var seasonIndex = 1; seasonIndex <= count; seasonIndex++) {
+        var historicalRow = historical[seasonKey(seasonIndex)] || {};
+        AWARDS.forEach(function (meta) {
+          var original = originalParts(historicalRow[meta.field]);
+          if (!original.name || original.name === '历史数据未登记' || !hasAlias(original.name, name)) return;
+          realAwards[meta.label] = (realAwards[meta.label] || 0) + 1;
+        });
+      }
+      return {
+        name: name,
+        awards: awards,
+        realAwards: realAwards,
+        count: Object.keys(awards).reduce(function (total, key) { return total + awards[key]; }, 0),
+        realCount: Object.keys(realAwards).reduce(function (total, key) { return total + realAwards[key]; }, 0)
+      };
+    });
+  }
+  function labelForAward(award) {
+    if (!award) return '';
+    if (typeof award === 'string') return award.replace(/^🏆\s*/, '').replace(/^👑\s*/, '').replace(/^🥇\s*/, '');
+    return LEAGUE_AWARD_LABELS[award.act] || String(award.label || award.act || '')
+      .replace(/^🏆\s*/, '').replace(/^👑\s*/, '').replace(/^🥇\s*/, '');
+  }
+  function isOwnedAward(award, record) {
+    if (!award) return false;
+    // 已保存的 awards 是 saveCurrentSeasonToCareer 筛选后的玩家荣誉清单。
+    if (typeof award === 'string') return true;
+    if (award.isUser === true) return true;
+    // leagueAwards 是联盟全量快照，不能因为它存在就当成玩家荣誉。
+    return !!(record && Array.isArray(record.awards) && !Array.isArray(record.leagueAwards));
+  }
+  function isExcludedAward(award) {
+    var act = award && typeof award === 'object' ? award.act : '';
+    var label = labelForAward(award);
+    return act === 'scoringTitle' || ['allNBA', 'allNBA2', 'allNBA3', 'allDefense', 'allDefense1', 'allDefense2', 'allRookie'].indexOf(act) >= 0 || /得分王|最佳阵容|最佳防守阵容|最佳新秀阵容/.test(label);
+  }
+  function aggregateOwnAwards(count) {
+    var totals = {};
+    var excluded = /得分王|最佳阵容|最佳防守阵容|最佳新秀阵容/;
+    var add = function (award, record) {
+      if (!isOwnedAward(award, record)) return;
+      var label = labelForAward(award);
+      if (!label || isExcludedAward(award)) return;
+      totals[label] = (totals[label] || 0) + 1;
+    };
+    // career.honors 是保存后的生涯累计荣誉，避免依赖页面打开时的保存时序。
+    (Array.isArray(career().honors) ? career().honors : []).forEach(function (award) { add(award, { awards: [award] }); });
+    // 当前赛季可能尚未写入 career.honors，只补充明确属于玩家的奖项。
+    if (!state()._careerSaved && state().season && Array.isArray(state().season.awards)) {
+      state().season.awards.forEach(function (award) { add(award, { leagueAwards: state().season.awards }); });
+    }
+    return totals;
+  }
+  function aggregateHistoricalAwards(count) {
+    var totals = {};
+    var holders = {};
+    var historical = window.HISTORICAL_AWARDS_BY_SEASON || {};
+    for (var i = 1; i <= count; i++) {
+      var row = historical[seasonKey(i)] || {};
+      AWARDS.forEach(function (meta) {
+        var original = originalParts(row[meta.field]);
+        if (!original.name || original.name === '历史数据未登记') return;
+        totals[meta.label] = (totals[meta.label] || 0) + 1;
+        holders[meta.label] = holders[meta.label] || {};
+        holders[meta.label][original.name] = (holders[meta.label][original.name] || 0) + 1;
+      });
+    }
+    return { totals: totals, holders: holders };
+  }
+  function comparisonRows(count) {
+    var own = aggregateOwnAwards(count);
+    var historical = aggregateHistoricalAwards(count);
+    var rows = [];
+    AWARDS.forEach(function (meta) {
+      var ownCount = own[meta.label] || 0;
+      if (!ownCount) return;
+      var originalCount = historical.totals[meta.label] || 0;
+      var holderMap = historical.holders[meta.label] || {};
+      var holders = Object.keys(holderMap).sort(function (a, b) { return holderMap[b] - holderMap[a]; });
+      rows.push({
+        label: meta.label,
+        own: ownCount,
+        original: originalCount,
+        holders: holders.slice(0, 2),
+        changed: holders.length > 0
+      });
+    });
+    return rows;
+  }
+  function starComparisonRows(count) {
+    return starAwardSummary(count).map(function (item) {
+      var gameText = Object.keys(item.awards).map(function (label) { return label + ' ' + item.awards[label] + ' 次'; }).join('、');
+      var realText = Object.keys(item.realAwards).map(function (label) { return label + ' ' + item.realAwards[label] + ' 次'; }).join('、');
+      var delta = item.count - item.realCount;
+      return { name: item.name, gameText: gameText || '模拟时间线中尚未获得荣誉', realText: realText || '现实荣誉表中未登记', delta: delta };
+    });
+  }
+  function annualStarComparison(count) {
+    var records = Array.isArray(career().seasons) ? career().seasons : [];
+    var historical = window.HISTORICAL_AWARDS_BY_SEASON || {};
+    var years = [];
+    for (var seasonIndex = 1; seasonIndex <= count; seasonIndex++) {
+      var seasonYear = baseYear() + seasonIndex - 1;
+      var group = starGroupForYear(seasonYear);
+      var gameAwards = [];
+      // 统计口径：从游戏开始赛季累计到当前赛季。
+      for (var priorIndex = 1; priorIndex <= seasonIndex; priorIndex++) {
+        var priorRecord = null;
+        for (var priorRecordIndex = 0; priorRecordIndex < records.length; priorRecordIndex++) {
+          if (parseInt(records[priorRecordIndex].seasonNum, 10) === priorIndex) { priorRecord = records[priorRecordIndex]; break; }
+        }
+        if (!priorRecord && priorIndex === count && state().season && Array.isArray(state().season.awards)) {
+          priorRecord = { leagueAwards: state().season.awards };
+        }
+        if (priorRecord && Array.isArray(priorRecord.leagueAwards)) gameAwards = gameAwards.concat(priorRecord.leagueAwards);
+      }
+      var players = group.players.map(function (name) {
+        var game = {};
+        var real = {};
+        gameAwards.forEach(function (award) {
+          if (!award || !award.act || award.act === 'scoringTitle' || ['allNBA', 'allNBA2', 'allNBA3', 'allDefense1', 'allDefense2', 'allRookie'].indexOf(award.act) >= 0 || !hasAlias(award.winner || '', name)) return;
+          var label = LEAGUE_AWARD_LABELS[award.act] || award.label || award.act;
+          game[label] = (game[label] || 0) + 1;
+        });
+        // 现实历史从 1984-85 起累计到当前游戏赛季，不受玩家开局年份影响。
+        for (var historicalYear = 1984; historicalYear <= seasonYear; historicalYear++) {
+          var historicalKey = historicalYear + '-' + String((historicalYear + 1) % 100).padStart(2, '0');
+          var historicalRow = historical[historicalKey] || {};
+          AWARDS.forEach(function (meta) {
+            var original = originalParts(historicalRow[meta.field]);
+            if (meta.act !== 'scoringTitle' && original.name && original.name !== '历史数据未登记' && hasAlias(original.name, name)) real[meta.label] = (real[meta.label] || 0) + 1;
+          });
+        }
+        var gameCount = Object.keys(game).reduce(function (sum, key) { return sum + game[key]; }, 0);
+        var realCount = Object.keys(real).reduce(function (sum, key) { return sum + real[key]; }, 0);
+        var awardLabels = [];
+        AWARDS.forEach(function (meta) {
+          if (game[meta.label] || real[meta.label]) awardLabels.push(meta.label);
+        });
+        Object.keys(game).concat(Object.keys(real)).forEach(function (label) {
+          if (awardLabels.indexOf(label) < 0 && (game[label] || real[label])) awardLabels.push(label);
+        });
+        var awardRows = awardLabels.map(function (label) {
+          var gameCountForAward = game[label] || 0;
+          var realCountForAward = real[label] || 0;
+          return { label: label, gameCount: gameCountForAward, realCount: realCountForAward, delta: gameCountForAward - realCountForAward };
+        });
+        return {
+          name: name,
+          gameText: Object.keys(game).map(function (label) { return label + ' ' + game[label] + ' 次'; }).join('、') || '无荣誉',
+          realText: Object.keys(real).map(function (label) { return label + ' ' + real[label] + ' 次'; }).join('、') || '无荣誉',
+          awardRows: awardRows,
+          delta: gameCount - realCount
+        };
+      });
+      years.push({ key: seasonKey(seasonIndex), players: players });
+    }
+    return years;
+  }
+  function injectAssets() {
+    if (injected) return;
+    var style = document.createElement('style');
+    style.id = STYLE_ID;
+    style.textContent = '#screen-historical-award-compare .history-hotplug{padding:0 12px 28px;}' +
+      '#screen-historical-award-compare .history-hotplug-head{padding:14px 8px 18px;text-align:center;border:1px solid var(--border,#ead8c4);background:var(--bg-card,#fffaf2);}' +
+      '#screen-historical-award-compare .history-hotplug-kicker{color:var(--orange,#e8752a);font-size:11px;font-weight:800;letter-spacing:2px;}' +
+      '#screen-historical-award-compare .history-hotplug-head h2{margin:8px 0 6px;font-size:27px;line-height:1.2;color:var(--text,#32261e);}' +
+      '#screen-historical-award-compare .history-hotplug-head p{margin:0;color:var(--text-muted,#8a7a66);font-size:12px;line-height:1.7;}' +
+      '#screen-historical-award-compare .history-hotplug-my-awards{margin:12px 0 0;padding:10px 12px;text-align:center;color:var(--orange,#e8752a);font-size:12px;font-weight:800;line-height:1.7;border-top:1px solid var(--border,#ead8c4);}' +
+      '#screen-historical-award-compare .history-hotplug-compare{margin-top:14px;}' +
+      '#screen-historical-award-compare .history-hotplug-compare-title{padding:0 2px 8px;font-size:13px;font-weight:900;color:var(--text,#32261e);}' +
+      '#screen-historical-award-compare .history-hotplug-year{margin-bottom:18px;}' +
+      '#screen-historical-award-compare .history-hotplug-year-title{padding:7px 10px;margin-bottom:7px;background:var(--orange,#e8752a);color:#fff;font-size:13px;font-weight:900;letter-spacing:1px;}' +
+      '#screen-historical-award-compare .history-hotplug-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);margin-bottom:8px;border:1px solid var(--border,#ead8c4);background:var(--bg-card,#fffaf2);}' +
+      '#screen-historical-award-compare .history-hotplug-cell{padding:12px;min-height:76px;}' +
+      '#screen-historical-award-compare .history-hotplug-cell+ .history-hotplug-cell{border-left:1px solid var(--border,#ead8c4);}' +
+      '#screen-historical-award-compare .history-hotplug-cell-label{font-size:10px;color:var(--text-muted,#8a7a66);}' +
+      '#screen-historical-award-compare .history-hotplug-award{margin-top:4px;font-size:13px;font-weight:800;color:var(--text,#32261e);}' +
+      '#screen-historical-award-compare .history-hotplug-award-list{margin-top:5px;}' +
+      '#screen-historical-award-compare .history-hotplug-award-line{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:5px;min-height:27px;border-bottom:1px solid var(--border-light,#f1e6d8);font-size:12px;color:var(--text,#32261e);}' +
+      '#screen-historical-award-compare .history-hotplug-award-line:last-child{border-bottom:0;}' +
+      '#screen-historical-award-compare .history-hotplug-award-line strong{font-size:13px;font-weight:900;white-space:nowrap;}' +
+      '#screen-historical-award-compare .history-hotplug-delta{font-size:11px;font-style:normal;font-weight:900;color:var(--text-muted,#8a7a66);white-space:nowrap;}' +
+      '#screen-historical-award-compare .history-hotplug-delta.is-behind{color:#d94b4b;}' +
+      '#screen-historical-award-compare .history-hotplug-delta.is-ahead{color:#2b9b62;}' +
+      '#screen-historical-award-compare .history-hotplug-count{margin-top:3px;font-size:24px;line-height:1;font-weight:900;color:var(--orange,#e8752a);}' +
+      '#screen-historical-award-compare .history-hotplug-cell.history-original .history-hotplug-count{color:var(--gold,#c69a52);}' +
+      '#screen-historical-award-compare .history-hotplug-note{margin-top:6px;color:var(--text-muted,#8a7a66);font-size:10px;line-height:1.55;}' +
+      '#screen-historical-award-compare .history-hotplug-stars-title{margin:20px 0 8px;padding:0 2px;font-size:13px;font-weight:900;color:var(--text,#32261e);}' +
+      '#screen-historical-award-compare .history-hotplug-stars{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;}' +
+      '#screen-historical-award-compare .history-hotplug-star{padding:11px 9px;border:1px solid var(--border,#ead8c4);background:var(--bg-card,#fffaf2);}' +
+      '#screen-historical-award-compare .history-hotplug-star strong{display:block;font-size:13px;color:var(--text,#32261e);}' +
+      '#screen-historical-award-compare .history-hotplug-star span{display:block;margin-top:4px;color:var(--orange,#e8752a);font-size:11px;font-weight:800;line-height:1.5;}' +
+      '#screen-historical-award-compare .history-hotplug-actions{display:flex;gap:8px;justify-content:center;margin-top:16px;}' +
+      '#screen-historical-award-compare .history-hotplug-actions button{flex:1;}' +
+      '@media(max-width:420px){#screen-historical-award-compare .history-hotplug-cell{padding:10px 8px;}#screen-historical-award-compare .history-hotplug-stars{grid-template-columns:repeat(2,minmax(0,1fr));}}';
+    document.head.appendChild(style);
+    var screen = document.createElement('div');
+    screen.className = 'screen';
+    screen.id = SCREEN_ID;
+    screen.innerHTML = '<div class="section-title"><h1>历史荣誉对照</h1><div class="sub">从你踏入联盟的那一年，到现在</div></div><div id="historical-award-compare-content"></div>';
+    // 放回主容器，避免 #app 的整屏最小高度把动态页面挤到首屏之外。
+    (document.getElementById('app') || document.body).appendChild(screen);
+    injected = true;
+  }
+  function render() {
+    injectAssets();
+    var count = seasonCount();
+    var start = baseYear();
+    var annualRows = annualStarComparison(count);
+    // 只保留当前完成的这一年，避免页面纵向堆叠整个生涯。
+    annualRows = annualRows.length ? [annualRows[annualRows.length - 1]] : [];
+    // 顶部“我的荣誉”与球星对照采用相同的累计口径。
+    var ownTotals = aggregateOwnAwards(count);
+    var content = document.getElementById('historical-award-compare-content');
+    if (!content) return;
+    var rowsHtml = annualRows.map(function (annual) {
+      var playerRows = annual.players.map(function (row) {
+        var awardRows = row.awardRows || [];
+        var gameLines = awardRows.map(function (award) {
+          var deltaClass = award.delta < 0 ? ' is-behind' : (award.delta > 0 ? ' is-ahead' : '');
+          var deltaText = '(' + (award.delta > 0 ? '+' : '') + award.delta + ')';
+          return '<div class="history-hotplug-award-line"><span>' + esc(award.label) + '</span><strong>' + award.gameCount + ' 次</strong><em class="history-hotplug-delta' + deltaClass + '">' + deltaText + '</em></div>';
+        }).join('');
+        var realLines = awardRows.map(function (award) {
+          return '<div class="history-hotplug-award-line"><span>' + esc(award.label) + '</span><strong>' + award.realCount + ' 次</strong></div>';
+        }).join('');
+        if (!awardRows.length) {
+          gameLines = '<div class="history-hotplug-award-line"><span>无荣誉</span></div>';
+          realLines = '<div class="history-hotplug-award-line"><span>无荣誉</span></div>';
+        }
+        return '<div class="history-hotplug-row"><div class="history-hotplug-cell"><div class="history-hotplug-cell-label">游戏时间线 · ' + esc(row.name) + '</div><div class="history-hotplug-award-list">' + gameLines + '</div></div><div class="history-hotplug-cell history-original"><div class="history-hotplug-cell-label">现实历史 · ' + esc(row.name) + '</div><div class="history-hotplug-award-list">' + realLines + '</div></div></div>';
+      }).join('');
+      return '<div class="history-hotplug-year"><div class="history-hotplug-year-title">' + esc(annual.key) + '</div>' + playerRows + '</div>';
+    }).join('');
+    // 历史对照页是赛季收束后的最后一页，下一步统一进入休赛期。
+    var next = '<button class="btn btn-primary" onclick="beginOffseason()">进入休赛期</button>';
+    career()._historicalAwardCompareViewedSeason = seasonCount();
+    if (typeof window.saveState === 'function') try { window.saveState(); } catch (e) {}
+    window.showScreen(SCREEN_ID);
+    var ownDetail = Object.keys(ownTotals).map(function (label) { return label + ' ' + ownTotals[label] + ' 次'; }).join('、') || '截至目前暂无个人荣誉';
+    content.innerHTML = '<div class="history-hotplug"><div class="history-hotplug-head"><div class="history-hotplug-kicker">累计至 · ' + esc(annualRows.length ? annualRows[0].key : seasonKey(count)) + '</div><h2>我的荣誉</h2><p>' + esc(userName()) + '从游戏开始赛季至今获得的荣誉，以及这段时间被你改写的历史。</p><div class="history-hotplug-my-awards">' + esc(ownDetail) + '</div></div><div class="history-hotplug-compare"><div class="history-hotplug-compare-title">截至本赛季累计：年代球星游戏中荣誉 对比 现实荣誉</div>' + rowsHtml + '</div><div class="history-hotplug-actions">' + next + '</div></div>';
+  }
+  function due() {
+    var count = seasonCount();
+    return API.enabled && isRegularSeasonComplete() && isChampionDecided() && count > 0 && baseYear() > 0 &&
+      parseInt(career()._historicalAwardCompareViewedSeason, 10) !== count;
+  }
+
+  // 每个赛季只展示一次入口，页面跳转仍由用户点击完成。
+  API.enable = function () { API.enabled = true; };
+  API.disable = function () { API.enabled = false; };
+  API.show = render;
+  API.isDue = due;
+  window.showHistoricalAwardComparison = function () { API.show(); };
+  window.HISTORICAL_AWARD_COMPARE_HOTPLUG = API;
+})(window, document);
