@@ -12473,6 +12473,126 @@ function attrFactor(val) {
  */
 function af(val) { return Math.pow(attrFactor(val), 1.5); }
 
+/**
+ * 每赛季动态计算五项数据（得分/篮板/助攻/抢断/盖帽）的缩放因子。
+ * 核心思路：
+ *   1. 先算出自建球员在每项数据上的"理论无缩放基础值"（基于 generatePlayerStatsNew 的公式）。
+ *   2. 再拿到当赛季历史数据王的实际数据。
+ *   3. 根据自建球员属性等级决定放大多少：属性越高，放大越多；属性不够高时不放大。
+ *   4. scale 有上限防止无限放大，让"属性为王"始终成立。
+ * 这样，当某项能力值较高的自建球员，就能在当赛季有机会竞争该单项数据王，
+ * 而不会因为历史数据王的数据过于夸张而完全没戏。
+ */
+function getSeasonStatScale() {
+  if (STATE.season && STATE.season._statScale) return STATE.season._statScale;
+
+  var defaultScale = { pts: 1.0, reb: 1.0, ast: 1.0, stl: 1.0, blk: 1.0 };
+
+  var attrs = STATE.attrs || {};
+  var pos = STATE.position || 'SF';
+  var myOVR = STATE.finalOVR || 75;
+
+  // ── 1. 自建球员各项数据的"理论基础值"估算 ──
+  //    基于 generatePlayerStatsNew 中的公式，假设节奏≈200、出场率≈1.05、随机系数≈1.05
+
+  // 篮板基础值 ≈ af(REB) * posScale.reb * 12，取中等位置权重
+  var rebTheoretical = af(attrs.REB || 50) * 4.5;
+
+  // 助攻基础值 ≈ af((PAS+HAN+CLU)/3) * posScale.ast * 14
+  var pasAvg = ((attrs.PAS || 50) + (attrs.HAN || 50) + (attrs.CLU || 50)) / 3;
+  var posAstW = (pos === 'PG' ? 1.2 : pos === 'SG' ? 0.9 : pos === 'SF' ? 0.7 : pos === 'PF' ? 0.6 : 0.5);
+  var astTheoretical = af(pasAvg) * posAstW * 14 * 0.42;
+
+  // 抢断基础值 ≈ stlAvg * 3.9（stlAvg 是 PDEF/ATH/HAN 的加权平均）
+  var stlAttr = af(attrs.PDEF || 50) * 0.5 + af(attrs.ATH || 50) * 0.25 + af(attrs.HAN || 50) * 0.25;
+  var stlTheoretical = stlAttr * 3.9;
+
+  // 盖帽基础值 ≈ blkAvg * 5.2
+  var blkAttr = af(attrs.BLK || 50) * 0.5 + af(attrs.IDEF || 50) * 0.25 + af(attrs.ATH || 50) * 0.25;
+  var blkTheoretical = blkAttr * 5.2;
+
+  // 得分基础值 ≈ offFactor * usage * 48 * 每出手得分
+  // 按位置取进攻属性
+  var posOffAttrs = {
+    'PG': ['threePT','MID','HAN','PAS'],
+    'SG': ['threePT','MID','FIN','HAN'],
+    'SF': ['threePT','MID','FIN','DNK','ATH'],
+    'PF': ['MID','FIN','DNK','STR','REB'],
+    'C':  ['FIN','DNK','STR','MID'],
+  };
+  var offList = posOffAttrs[pos] || posOffAttrs['SF'];
+  var offSum = 0;
+  for (var oi = 0; oi < offList.length; oi++) offSum += parseInt(attrs[offList[oi]]) || 50;
+  var offAvg = offSum / offList.length;
+  var offFactor = af(offAvg);
+  var baseUsage = 0.20;
+  var usageScaleBase = myOVR > 75 ? 1 + (myOVR - 75) * 0.018 : 1.0;
+  var expectedPtsPerFga = 1.35;
+  var ptsTheoretical = offFactor * baseUsage * Math.min(1.8, usageScaleBase) * 48 * expectedPtsPerFga * 1.05;
+
+  // ── 2. 获取当赛季历史数据王 ──
+  var maxPts = 0, maxReb = 0, maxAst = 0, maxStl = 0, maxBlk = 0;
+  var year = typeof getCurrentSeasonYear === 'function' ? getCurrentSeasonYear() : null;
+  var seasonKey = year ? String(year) + '-' + String((parseInt(year, 10) + 1) % 100).padStart(2, '0') : '';
+  var full = window.CAREER_FULL_PLAYER_DATA;
+  var rows = full && full.seasons && full.seasons[seasonKey] && full.seasons[seasonKey].players;
+  if (rows && rows.length) {
+    rows.forEach(function(p) {
+      maxPts = Math.max(maxPts, Number(p.pts) || 0);
+      maxReb = Math.max(maxReb, Number(p.reb) || 0);
+      maxAst = Math.max(maxAst, Number(p.ast) || 0);
+      maxStl = Math.max(maxStl, Number(p.stl) || 0);
+      maxBlk = Math.max(maxBlk, Number(p.blk) || 0);
+    });
+  }
+  // 如果没有历史数据，用现代NBA合理的数据王水平
+  if (maxPts < 15) maxPts = 34;
+  if (maxReb < 8)  maxReb = 16;
+  if (maxAst < 6)  maxAst = 12;
+  if (maxStl < 1)  maxStl = 2.8;
+  if (maxBlk < 1)  maxBlk = 3.2;
+
+  // ── 3. 根据属性等级 + 数据差距 计算 scale ──
+  //    calcScale: 输入(理论基础值, 历史数据王值, 核心属性值, scale上限)
+  //    返回: 1.0 到 cap 之间的值
+  //
+  //    属性门槛逻辑：
+  //      属性 < 55: 完全不放大 → 返回 1.0
+  //      55~75: 渐进放大，属性越高放大越多
+  //      >=75: 全力参与竞争
+  //
+  //    数据差距逻辑：
+  //      如果理论基础值已经 >= 历史数据王的 65%，不放大（留随机波动即可）
+  //      否则按比例放大，但不超过 cap
+
+  function calcScale(theoretical, maxStat, attrVal, cap) {
+    // 属性门槛：先看属性够不够格
+    var attrFactor = Math.max(0, Math.min(1, (attrVal - 55) / 25));
+    if (attrFactor <= 0) return 1.0;
+
+    // 如果理论基础已经够高，不用放大
+    if (theoretical * 1.15 >= maxStat) return 1.0;
+
+    // 需要放大的倍数
+    var needed = maxStat / Math.max(0.5, theoretical);
+    // 属性因子 + 0.85 让它不那么激进（留点随机空间给运气）
+    var raw = 1.0 + (needed - 1.0) * attrFactor * 0.85;
+
+    return Math.max(1.0, Math.min(cap, raw));
+  }
+
+  var scale = {
+    pts: calcScale(ptsTheoretical, maxPts, offAvg, 1.7),
+    reb: calcScale(rebTheoretical, maxReb, parseInt(attrs.REB) || 50, 2.2),
+    ast: calcScale(astTheoretical, maxAst, pasAvg, 2.2),
+    stl: calcScale(stlTheoretical, maxStl, parseInt(attrs.PDEF) || 50, 2.5),
+    blk: calcScale(blkTheoretical, maxBlk, parseInt(attrs.BLK) || 50, 2.5),
+  };
+
+  if (STATE.season) STATE.season._statScale = scale;
+  return scale;
+}
+
 function getSeasonUsageBias() {
   if (!STATE.season) return 1;
   if (STATE.season._usageBias == null) {
@@ -12607,8 +12727,9 @@ function generatePlayerStatsNew(attrs, gameResult, isPlayoff, opts) {
   // ★ 助攻 = 手感 + 传球 + 关键 共同决定
   const astScale = posScale.ast || 0.4;
   const pasAvg = ((attrs.PAS||50) + (attrs.HAN||50) + (attrs.CLU||50)) / 3;
+  const scale = getSeasonStatScale();
   // ★ 助攻 ±30% 波动 (原±60%)
-  const astVal = af(pasAvg) * (totalScore / 200) * astScale * 14 * statMinsFactor * (0.7 + Math.random() * 0.6);
+  const astVal = af(pasAvg) * (totalScore / 200) * astScale * 14 * scale.ast * statMinsFactor * (0.7 + Math.random() * 0.6);
   const ast = Math.round(Math.max(0, astVal));
   
   // ★ 抢断 = PDEF主导 + ATH/HAN辅助（按位置权重）
@@ -12616,7 +12737,7 @@ function generatePlayerStatsNew(attrs, gameResult, isPlayoff, opts) {
   const stlSum = stlF.PDEF + (stlF.ATH || 0) + (stlF.HAN || 0);
   const stlAvg = (af(attrs.PDEF||50) * stlF.PDEF + af(attrs.ATH||50) * (stlF.ATH || 0) + af(attrs.HAN||50) * (stlF.HAN || 0)) / stlSum;
   // ★ 抢断 ±30% 波动 (原±60%)
-  const stlVal = stlAvg * (totalScore / 200) * 3.9 * statMinsFactor * (0.7 + Math.random() * 0.6);
+  const stlVal = stlAvg * (totalScore / 200) * 3.9 * scale.stl * statMinsFactor * (0.7 + Math.random() * 0.6);
   const stl = Math.round(Math.max(0, stlVal));
   
   // ★ 盖帽 = BLK主导 + IDEF辅助 + ATH微调（按位置权重）
@@ -12624,7 +12745,7 @@ function generatePlayerStatsNew(attrs, gameResult, isPlayoff, opts) {
   const blkSum = blkF.BLK + (blkF.IDEF || 0) + (blkF.ATH || 0);
   const blkAvg = (af(attrs.BLK||50) * blkF.BLK + af(attrs.IDEF||50) * (blkF.IDEF || 0) + af(attrs.ATH||50) * (blkF.ATH || 0)) / blkSum;
   // ★ 盖帽 ±30% 波动 (原±60%)
-  const blkVal = blkAvg * (totalScore / 200) * 5.2 * statMinsFactor * (0.7 + Math.random() * 0.6);
+  const blkVal = blkAvg * (totalScore / 200) * 5.2 * scale.blk * statMinsFactor * (0.7 + Math.random() * 0.6);
   const blk = Math.round(Math.max(0, blkVal));
   
   // ★ 失误 = (HAN+CLU)/2 × 严格递减曲线（越高失误越少）(Experimental: 上调上限)
