@@ -9275,23 +9275,10 @@ window._HIDE_TEAM_LOGOS = false;
 function getTeamLogo(team, size) {
   team = normalizeTeamCode(team);
   if (window._HIDE_TEAM_LOGOS) return '';
-  // 传奇模式优先尝试历史年份专属 logo
-  var eraSrc = '';
-  if (STATE && STATE.draftMode === 'historical' && STATE.eraStart && typeof getEraTeamLogo === 'function') {
-    try { eraSrc = getEraTeamLogo(team); } catch(e) {}
-  }
-  var logoUrl = eraSrc || (window.TEAM_LOGOS && window.TEAM_LOGOS[team]) || '';
-  if (!logoUrl) return '';
-  // 相对路径转为原始 CDN 绝对地址
-  if (logoUrl.startsWith('./assets/') || logoUrl.startsWith('assets/')) {
-    logoUrl = 'https://activity-static.hoopchina.com.cn/colorbox-activities/activity-project-ai-1783761934042/' + logoUrl.replace(/^\.\//, '');
-  }
-  // 通过 CORS 代理加载外部图片
-  if (logoUrl.startsWith('http') && !logoUrl.includes('images.weserv.nl')) {
-    logoUrl = 'https://images.weserv.nl/?url=' + encodeURIComponent(logoUrl);
-  }
+  // 统一使用本地 logo 文件
+  if (!window.TEAM_LOGOS || !window.TEAM_LOGOS[team]) return '';
   const s = size || 20;
-  return `<img class="team-logo" src="${logoUrl}" style="width:${s}px;height:${s}px;vertical-align:middle;border-radius:4px;" alt="${team}">`;
+  return `<img class="team-logo" src="${window.TEAM_LOGOS[team]}" style="width:${s}px;height:${s}px;vertical-align:middle;border-radius:4px;" alt="${team}">`;
 }
 
 function toggleTeamLogos() {
