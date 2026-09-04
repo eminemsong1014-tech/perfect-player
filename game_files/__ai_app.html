@@ -26981,7 +26981,7 @@ function shouldOfferPlayerRetirement() {
   if (c.flags && (c.flags.countdownDone || c.flags.playOneMore)) return true;
   // 退役倒计时进行中：跳过加点页
   var cdNode = typeof getBranchNode === 'function' ? getBranchNode('retirement_countdown') : null;
-  if (cdNode) return true;
+  if (cdNode && cdNode !== 'start') return true;
   if (age >= maxAge) return true;
   if (age >= maxAge - 1) return Math.random() < 0.70;
   if (age >= maxAge - 2) return Math.random() < 0.55;
