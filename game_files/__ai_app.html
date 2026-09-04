@@ -10698,15 +10698,19 @@ function ensureStatTitleAwards() {
     if (userDisplayName && playerNames.indexOf(userDisplayName) >= 0) return false;
     return Number(player.gp) >= minimumGames;
   }).map(function(player) {
+    // 数据上限：与 generatePlayerStatsNew 保持一致，避免AI数据不真实
+    var capAst = function(v) { return Math.min(v, 9.0); };
+    var capStl = function(v) { return Math.min(v, 2.5); };
+    var capBlk = function(v) { return Math.min(v, 3.0); };
     return {
       cname: player.cname || player.name || '未知球员',
       playerName: player.name || player.nameEN || '',
       team: player.team || '',
       pts: Number(player.pts) || 0,
       reb: Number(player.reb) || 0,
-      ast: Number(player.ast) || 0,
-      stl: Number(player.stl) || 0,
-      blk: Number(player.blk) || 0,
+      ast: capAst(Number(player.ast) || 0),
+      stl: capStl(Number(player.stl) || 0),
+      blk: capBlk(Number(player.blk) || 0),
       ovr: Number(player.ovr) || 0,
       isUser: false
     };
@@ -10717,9 +10721,9 @@ function ensureStatTitleAwards() {
       cname: getHupuDisplayName(), playerName: '', team: STATE.careerTeam || '',
       pts: Number(avg.pts) || Number(ps.pts) / games || 0,
       reb: Number(avg.reb) || Number(ps.reb) / games || 0,
-      ast: Number(avg.ast) || Number(ps.ast) / games || 0,
-      stl: Number(avg.stl) || Number(ps.stl) / games || 0,
-      blk: Number(avg.blk) || Number(ps.blk) / games || 0,
+      ast: capAst(Number(avg.ast) || Number(ps.ast) / games || 0),
+      stl: capStl(Number(avg.stl) || Number(ps.stl) / games || 0),
+      blk: capBlk(Number(avg.blk) || Number(ps.blk) / games || 0),
       ovr: Number(STATE.finalOVR) || 0, isUser: true
     });
   }
