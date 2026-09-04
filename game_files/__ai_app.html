@@ -10085,14 +10085,14 @@ function estimatePlayerStats(player) {
   var rebPosBonus = (pos === 'C' ? 2.0 : pos === 'PF' ? 1.0 : 0);
   var reb = rebBase + rebPosBonus;
   // ★ 助攻：属性主导，位置微调（所有位置传球好都有机会）
-  var astBase = f(player.PAS) * 6 + 1;
+  var astBase = f(player.PAS) * 9 + 1;
   var astPosBonus = (pos === 'PG' ? 1.8 : pos === 'SG' ? 1.0 : 0.5);
   var ast = astBase + astPosBonus;
   // ★ 抢断：属性主导，位置微调（所有位置防守好都有机会）
   var stlPosBonus = (pos === 'PG' ? 0.2 : pos === 'SG' ? 0.15 : 0.05);
-  var stl = f(player.PDEF) * 2.0 + 0.3 + stlPosBonus;
+  var stl = f(player.PDEF) * 3.9 + 0.3 + stlPosBonus;
   // ★ 盖帽：属性主导，位置微调（所有位置盖帽属性高都有机会）
-  var blkBase = f(player.BLK) * 1.6 + 0.2;
+  var blkBase = f(player.BLK) * 4.2 + 0.2;
   var blkPosBonus = (pos === 'C' ? 0.8 : pos === 'PF' ? 0.4 : 0.15);
   var blk = blkBase + blkPosBonus;
   return { pts: Math.round(pts * 10) / 10, reb: Math.round(reb * 10) / 10, ast: Math.round(ast * 10) / 10, stl: Math.round(stl * 10) / 10, blk: Math.round(blk * 10) / 10, pos: pos, ovr: parseInt(player.ovr) || 50 };
@@ -10698,19 +10698,15 @@ function ensureStatTitleAwards() {
     if (userDisplayName && playerNames.indexOf(userDisplayName) >= 0) return false;
     return Number(player.gp) >= minimumGames;
   }).map(function(player) {
-    // 数据上限：与 generatePlayerStatsNew 保持一致，避免AI数据不真实
-    var capAst = function(v) { return Math.min(v, 9.0); };
-    var capStl = function(v) { return Math.min(v, 2.5); };
-    var capBlk = function(v) { return Math.min(v, 3.0); };
     return {
       cname: player.cname || player.name || '未知球员',
       playerName: player.name || player.nameEN || '',
       team: player.team || '',
       pts: Number(player.pts) || 0,
       reb: Number(player.reb) || 0,
-      ast: capAst(Number(player.ast) || 0),
-      stl: capStl(Number(player.stl) || 0),
-      blk: capBlk(Number(player.blk) || 0),
+      ast: Number(player.ast) || 0,
+      stl: Number(player.stl) || 0,
+      blk: Number(player.blk) || 0,
       ovr: Number(player.ovr) || 0,
       isUser: false
     };
@@ -10721,9 +10717,9 @@ function ensureStatTitleAwards() {
       cname: getHupuDisplayName(), playerName: '', team: STATE.careerTeam || '',
       pts: Number(avg.pts) || Number(ps.pts) / games || 0,
       reb: Number(avg.reb) || Number(ps.reb) / games || 0,
-      ast: capAst(Number(avg.ast) || Number(ps.ast) / games || 0),
-      stl: capStl(Number(avg.stl) || Number(ps.stl) / games || 0),
-      blk: capBlk(Number(avg.blk) || Number(ps.blk) / games || 0),
+      ast: Number(avg.ast) || Number(ps.ast) / games || 0,
+      stl: Number(avg.stl) || Number(ps.stl) / games || 0,
+      blk: Number(avg.blk) || Number(ps.blk) / games || 0,
       ovr: Number(STATE.finalOVR) || 0, isUser: true
     });
   }
@@ -12612,7 +12608,7 @@ function generatePlayerStatsNew(attrs, gameResult, isPlayoff, opts) {
   const astScale = posScale.ast || 0.4;
   const pasAvg = ((attrs.PAS||50) + (attrs.HAN||50) + (attrs.CLU||50)) / 3;
   // ★ 助攻 ±30% 波动 (原±60%)
-  const astVal = af(pasAvg) * (totalScore / 200) * astScale * 9 * statMinsFactor * (0.7 + Math.random() * 0.6);
+  const astVal = af(pasAvg) * (totalScore / 200) * astScale * 14 * statMinsFactor * (0.7 + Math.random() * 0.6);
   const ast = Math.round(Math.max(0, astVal));
   
   // ★ 抢断 = PDEF主导 + ATH/HAN辅助（按位置权重）
@@ -12620,7 +12616,7 @@ function generatePlayerStatsNew(attrs, gameResult, isPlayoff, opts) {
   const stlSum = stlF.PDEF + (stlF.ATH || 0) + (stlF.HAN || 0);
   const stlAvg = (af(attrs.PDEF||50) * stlF.PDEF + af(attrs.ATH||50) * (stlF.ATH || 0) + af(attrs.HAN||50) * (stlF.HAN || 0)) / stlSum;
   // ★ 抢断 ±30% 波动 (原±60%)
-  const stlVal = stlAvg * (totalScore / 200) * 2.0 * statMinsFactor * (0.7 + Math.random() * 0.6);
+  const stlVal = stlAvg * (totalScore / 200) * 3.9 * statMinsFactor * (0.7 + Math.random() * 0.6);
   const stl = Math.round(Math.max(0, stlVal));
   
   // ★ 盖帽 = BLK主导 + IDEF辅助 + ATH微调（按位置权重）
@@ -12628,7 +12624,7 @@ function generatePlayerStatsNew(attrs, gameResult, isPlayoff, opts) {
   const blkSum = blkF.BLK + (blkF.IDEF || 0) + (blkF.ATH || 0);
   const blkAvg = (af(attrs.BLK||50) * blkF.BLK + af(attrs.IDEF||50) * (blkF.IDEF || 0) + af(attrs.ATH||50) * (blkF.ATH || 0)) / blkSum;
   // ★ 盖帽 ±30% 波动 (原±60%)
-  const blkVal = blkAvg * (totalScore / 200) * 2.0 * statMinsFactor * (0.7 + Math.random() * 0.6);
+  const blkVal = blkAvg * (totalScore / 200) * 5.2 * statMinsFactor * (0.7 + Math.random() * 0.6);
   const blk = Math.round(Math.max(0, blkVal));
   
   // ★ 失误 = (HAN+CLU)/2 × 严格递减曲线（越高失误越少）(Experimental: 上调上限)
