@@ -1776,6 +1776,7 @@ function getPlayerHeadshotStyle(playerName, displaySize) {
   displaySize = displaySize || 30;
   var record = getHupuPlayerPhotoRecord(playerName);
   var url = record && (record.b || record.p);
+  if (url) url = url.replace(/^http:\/\//, 'https://');
   var pack = window.HUPU_PLAYER_PHOTOS;
   if (!url && pack && pack.fallback) {
     url = pack.fallback;
