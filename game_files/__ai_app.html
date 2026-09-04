@@ -9275,15 +9275,6 @@ window._HIDE_TEAM_LOGOS = false;
 function getTeamLogo(team, size) {
   team = normalizeTeamCode(team);
   if (window._HIDE_TEAM_LOGOS) return '';
-  if (STATE && STATE.draftMode === 'historical' && STATE.eraStart && typeof getEraTeamLogo === 'function') {
-    try {
-      var eraSrc = getEraTeamLogo(team);
-      if (eraSrc) {
-        const es = size || 20;
-        return `<img class="team-logo" src="${eraSrc}" style="width:${es}px;height:${es}px;vertical-align:middle;border-radius:4px;" alt="${team}">`;
-      }
-    } catch(e) {}
-  }
   if (!window.TEAM_LOGOS || !window.TEAM_LOGOS[team]) return '';
   const s = size || 20;
   return `<img class="team-logo" src="${window.TEAM_LOGOS[team]}" style="width:${s}px;height:${s}px;vertical-align:middle;border-radius:4px;" alt="${team}">`;
